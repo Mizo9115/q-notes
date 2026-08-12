@@ -32,7 +32,14 @@ export function BackupControls({ onImported }: BackupControlsProps) {
     setStatus(null);
     try {
       const result = await importNotes(file);
-      setStatus(`Imported ${result.imported} of ${result.total} notes.`);
+      const parts = [`${result.imported} of ${result.total} notes`];
+      if (result.importedBookmarks !== undefined && result.totalBookmarks !== undefined) {
+        parts.push(`${result.importedBookmarks} of ${result.totalBookmarks} bookmarks`);
+      }
+      if (result.importedTopics !== undefined && result.totalTopics !== undefined) {
+        parts.push(`${result.importedTopics} of ${result.totalTopics} topics`);
+      }
+      setStatus(`Imported ${parts.join(', ')}.`);
       onImported?.();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Import failed.');

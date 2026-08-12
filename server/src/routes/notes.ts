@@ -5,11 +5,15 @@ import {
   deleteNote,
   findVerseNote,
   findWordNoteAtLocation,
+  getAllBookmarks,
   getAllNotes,
+  getAllTopics,
   getCategoriesAndTags,
   getNoteById,
   updateNote,
+  upsertBookmark,
   upsertNote,
+  upsertTopic,
   type NoteType,
 } from '../db.js';
 
@@ -23,8 +27,10 @@ function normalizeTags(raw: unknown): string[] {
 
 notesRouter.get('/export', (_req, res) => {
   const notes = getAllNotes();
+  const bookmarks = getAllBookmarks();
+  const topics = getAllTopics();
   const payload = {
-    version: 2,
+    version: 4,
     exportedAt: new Date().toISOString(),
     notes: notes.map((n) => ({
       id: n.id,
@@ -38,6 +44,21 @@ notesRouter.get('/export', (_req, res) => {
       contentJson: n.contentJson,
       createdAt: n.createdAt,
       updatedAt: n.updatedAt,
+    })),
+    bookmarks: bookmarks.map((b) => ({
+      id: b.id,
+      chapterId: b.chapterId,
+      verseId: b.verseId,
+      createdAt: b.createdAt,
+    })),
+    topics: topics.map((t) => ({
+      id: t.id,
+      title: t.title,
+      category: t.category,
+      tags: t.tags,
+      contentJson: t.contentJson,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
     })),
   };
   res.setHeader('Content-Type', 'application/json');
@@ -63,7 +84,15 @@ notesRouter.post('/import', upload.single('file'), (req, res) => {
     }
 
     const notes = (raw as { notes: Array<Record<string, unknown>> }).notes;
+    const bookmarks = Array.isArray((raw as { bookmarks?: unknown }).bookmarks)
+      ? ((raw as { bookmarks: Array<Record<string, unknown>> }).bookmarks ?? [])
+      : [];
+    const topics = Array.isArray((raw as { topics?: unknown }).topics)
+      ? ((raw as { topics: Array<Record<string, unknown>> }).topics ?? [])
+      : [];
     let imported = 0;
+    let importedBookmarks = 0;
+    let importedTopics = 0;
 
     for (const item of notes) {
       if (
@@ -97,7 +126,56 @@ notesRouter.post('/import', upload.single('file'), (req, res) => {
       imported++;
     }
 
-    res.json({ imported, total: notes.length });
+    for (const item of bookmarks) {
+      if (
+        typeof item.id !== 'string' ||
+        typeof item.chapterId !== 'number' ||
+        typeof item.verseId !== 'number'
+      ) {
+        res.status(400).json({ error: 'Invalid bookmark entry in backup file' });
+        return;
+      }
+
+      upsertBookmark({
+        id: item.id,
+        chapterId: item.chapterId,
+        verseId: item.verseId,
+        createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
+      });
+      importedBookmarks++;
+    }
+
+    for (const item of topics) {
+      if (
+        typeof item.id !== 'string' ||
+        typeof item.title !== 'string' ||
+        !item.title.trim() ||
+        item.contentJson === undefined
+      ) {
+        res.status(400).json({ error: 'Invalid topic entry in backup file' });
+        return;
+      }
+
+      upsertTopic({
+        id: item.id,
+        title: item.title,
+        category: typeof item.category === 'string' ? item.category : null,
+        tags: normalizeTags(item.tags),
+        contentJson: item.contentJson,
+        createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
+        updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : undefined,
+      });
+      importedTopics++;
+    }
+
+    res.json({
+      imported,
+      total: notes.length,
+      importedBookmarks,
+      totalBookmarks: bookmarks.length,
+      importedTopics,
+      totalTopics: topics.length,
+    });
   } catch {
     res.status(400).json({ error: 'Failed to parse import file as JSON' });
   }

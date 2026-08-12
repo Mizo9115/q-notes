@@ -4,7 +4,9 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './db.js';
+import { bookmarksRouter } from './routes/bookmarks.js';
 import { notesRouter } from './routes/notes.js';
+import { topicsRouter } from './routes/topics.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -18,6 +20,8 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/notes', notesRouter);
+app.use('/api/bookmarks', bookmarksRouter);
+app.use('/api/topics', topicsRouter);
 
 const clientDist = join(__dirname, '..', '..', 'client', 'dist');
 if (existsSync(clientDist)) {

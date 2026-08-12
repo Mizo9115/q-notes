@@ -72,6 +72,12 @@ export function useWordSelection({ chapterId, notes }: UseWordSelectionOptions) 
 
   const handleWordMouseDown = useCallback(
     (verseId: number, wordIndex: number, verseText: string, event: React.MouseEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        // Let the browser start a native, copyable text selection instead of a note-selection drag.
+        return;
+      }
+      event.preventDefault();
+
       if (event.shiftKey && anchorWord.current?.verseId === verseId) {
         const start = Math.min(anchorWord.current.wordIndex, wordIndex);
         const end = Math.max(anchorWord.current.wordIndex, wordIndex);

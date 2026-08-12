@@ -26,6 +26,10 @@ export interface NoteSelection {
 export interface ImportResult {
   imported: number;
   total: number;
+  importedBookmarks?: number;
+  totalBookmarks?: number;
+  importedTopics?: number;
+  totalTopics?: number;
 }
 
 export interface NotesMeta {

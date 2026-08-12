@@ -18,6 +18,8 @@ export function AppLayout() {
             Surahs
           </NavLink>
           <NavLink to="/notes">All notes</NavLink>
+          <NavLink to="/topics">Topics</NavLink>
+          <NavLink to="/bookmarks">Bookmarks</NavLink>
         </nav>
         <div className="header-spacer" />
         <ThemeToggle />

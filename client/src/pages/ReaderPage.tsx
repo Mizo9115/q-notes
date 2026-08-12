@@ -1,12 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArabicVerse } from '../components/ArabicVerse';
 import { LanguageControls } from '../components/LanguageControls';
 import { NotePanel } from '../components/NotePanel';
 import { useChapterData } from '../hooks/useChapterData';
+import { useBookmarks } from '../hooks/useBookmarks';
 import { useNotes } from '../hooks/useNotes';
 import { useWordSelection } from '../hooks/useWordSelection';
 import { useUiStore } from '../store/uiStore';
+import { scrollToVerse } from '../utils/scrollToVerse';
 
 export function ReaderPage() {
   const { id } = useParams();
@@ -19,9 +21,12 @@ export function ReaderPage() {
   const setActiveNote = useUiStore((s) => s.setActiveNote);
   const openNotePanel = useUiStore((s) => s.openNotePanel);
   const [searchParams] = useSearchParams();
+  const [verseSeek, setVerseSeek] = useState('');
+  const [verseSeekError, setVerseSeekError] = useState<string | null>(null);
 
   const { chapter, loading, error } = useChapterData(chapterId, translationLanguage);
   const { notes, saveNote, removeNote } = useNotes(chapterId);
+  const { isBookmarked, toggleBookmark } = useBookmarks(chapterId);
   const selection = useWordSelection({ chapterId, notes });
 
   const showTranslation = translationLanguage !== null;
@@ -80,6 +85,20 @@ export function ReaderPage() {
     );
   }, [chapter, chapterId, notes, openNotePanel, searchParams]);
 
+  useEffect(() => {
+    if (!chapter) return;
+
+    const gotoVerse = Number(searchParams.get('goto'));
+    if (Number.isNaN(gotoVerse)) return;
+    if (gotoVerse < 1 || gotoVerse > chapter.total_verses) return;
+
+    const timer = window.setTimeout(() => {
+      scrollToVerse(gotoVerse);
+    }, 100);
+
+    return () => window.clearTimeout(timer);
+  }, [chapter, searchParams]);
+
   if (Number.isNaN(chapterId)) {
     return <div className="page-state error-text">Invalid surah number.</div>;
   }
@@ -112,6 +131,20 @@ export function ReaderPage() {
     await removeNote(activeNote.id);
   };
 
+  const handleGoToVerse = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const verseId = Number(verseSeek.trim());
+    if (Number.isNaN(verseId) || verseId < 1 || verseId > chapter.total_verses) {
+      setVerseSeekError(`Enter a verse between 1 and ${chapter.total_verses}.`);
+      return;
+    }
+    if (!scrollToVerse(verseId)) {
+      setVerseSeekError('Verse not found on this page.');
+      return;
+    }
+    setVerseSeekError(null);
+  };
+
   return (
     <div className={`reader-layout ${notePanelOpen ? 'panel-open' : ''}`}>
       <section className="reader-main">
@@ -119,7 +152,26 @@ export function ReaderPage() {
           <Link to="/" className="back-link">
             ← All surahs
           </Link>
-          <LanguageControls />
+          <div className="reader-toolbar-controls">
+            <form className="verse-seek control-group" onSubmit={handleGoToVerse}>
+              <span>Go to verse</span>
+              <input
+                type="number"
+                min={1}
+                max={chapter.total_verses}
+                value={verseSeek}
+                onChange={(e) => {
+                  setVerseSeek(e.target.value);
+                  setVerseSeekError(null);
+                }}
+                placeholder={`1-${chapter.total_verses}`}
+                aria-label="Verse number"
+              />
+              <button type="submit">Go</button>
+            </form>
+            {verseSeekError && <p className="verse-seek-error">{verseSeekError}</p>}
+            <LanguageControls />
+          </div>
         </div>
 
         <header className="chapter-header">
@@ -152,6 +204,8 @@ export function ReaderPage() {
               onWordMouseEnter={selection.handleWordMouseEnter}
               onWordMouseUp={selection.handleWordMouseUp}
               onVerseNoteClick={(verseId) => void selection.openVerseSelection(verseId)}
+              onToggleBookmark={(verseId) => void toggleBookmark(chapter.id, verseId)}
+              isBookmarked={isBookmarked(verse.id)}
               isWordInDragPreview={selection.isWordInDragPreview}
             />
           ))}

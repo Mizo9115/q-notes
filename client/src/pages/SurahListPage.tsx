@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { ChapterSummary } from '../types/quran';
 
 export function SurahListPage() {
+  const navigate = useNavigate();
   const [chapters, setChapters] = useState<ChapterSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +37,16 @@ export function SurahListPage() {
   if (loading) return <div className="page-state">Loading surahs…</div>;
   if (error) return <div className="page-state error-text">{error}</div>;
 
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return;
+    const surahId = Number(query.trim());
+    if (Number.isNaN(surahId)) return;
+    const match = chapters.find((chapter) => chapter.id === surahId);
+    if (match) navigate(`/surah/${match.id}`);
+  };
+
   return (
-    <div className="surah-list-page">
+    <div className="surah-list-page" dir="rtl">
       <div className="page-heading">
         <h1>Surahs</h1>
         <p>Select a surah to read and annotate individual words or phrases.</p>
@@ -48,6 +57,7 @@ export function SurahListPage() {
         placeholder="Search by number, Arabic name, or transliteration…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleSearchKeyDown}
       />
       <div className="surah-grid">
         {filtered.map((chapter) => (

@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { noteCoversWord, verseHasNote } from '../hooks/useNotes';
 import { useUiStore } from '../store/uiStore';
 import type { Note } from '../types/notes';
@@ -12,6 +13,8 @@ interface ArabicVerseProps {
   onWordMouseEnter: (verseId: number, wordIndex: number) => void;
   onWordMouseUp: (verseId: number, wordIndex: number, verseText: string) => void;
   onVerseNoteClick: (verseId: number) => void;
+  onToggleBookmark: (verseId: number) => void;
+  isBookmarked: boolean;
   isWordInDragPreview: (verseId: number, wordIndex: number) => boolean;
   showTransliteration: boolean;
   showTranslation: boolean;
@@ -38,6 +41,8 @@ export function ArabicVerse({
   onWordMouseEnter,
   onWordMouseUp,
   onVerseNoteClick,
+  onToggleBookmark,
+  isBookmarked,
   isWordInDragPreview,
   showTransliteration,
   showTranslation,
@@ -49,17 +54,28 @@ export function ArabicVerse({
 
   return (
     <article
-      className={`verse-block ${hasVerseNote ? 'has-verse-note' : ''}`}
+      className={`verse-block ${hasVerseNote ? 'has-verse-note' : ''} ${isBookmarked ? 'is-bookmarked' : ''}`}
       data-verse={verse.id}
     >
-      <button
-        type="button"
-        className={`verse-number ${hasVerseNote ? 'has-note' : ''}`}
-        title={hasVerseNote ? 'Edit verse note' : 'Add verse note'}
-        onClick={() => onVerseNoteClick(verse.id)}
-      >
-        <span className="verse-number-label">{verse.id}</span>
-      </button>
+      <div className="verse-controls">
+        <button
+          type="button"
+          className={`verse-number ${hasVerseNote ? 'has-note' : ''}`}
+          title={hasVerseNote ? 'Edit verse note' : 'Add verse note'}
+          onClick={() => onVerseNoteClick(verse.id)}
+        >
+          <span className="verse-number-label">{verse.id}</span>
+        </button>
+        <button
+          type="button"
+          className={`verse-bookmark ${isBookmarked ? 'is-active' : ''}`}
+          title={isBookmarked ? 'Remove bookmark' : 'Bookmark verse'}
+          aria-pressed={isBookmarked}
+          onClick={() => onToggleBookmark(verse.id)}
+        >
+          {isBookmarked ? '★' : '☆'}
+        </button>
+      </div>
       <div className="verse-content">
         <p className="arabic-line" dir="rtl">
           {words.map((word, index) => {
@@ -73,25 +89,27 @@ export function ArabicVerse({
             );
             const isPreview = isWordInDragPreview(verse.id, index);
             return (
-              <span
-                key={`${chapterId}-${verse.id}-${index}`}
-                className={[
-                  'word-token',
-                  hasNote ? 'has-note' : '',
-                  isSelected ? 'is-selected' : '',
-                  isPreview ? 'drag-preview' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                data-chapter={chapterId}
-                data-verse={verse.id}
-                data-word={index}
-                onMouseDown={(event) => onWordMouseDown(verse.id, index, verse.text, event)}
-                onMouseEnter={() => onWordMouseEnter(verse.id, index)}
-                onMouseUp={() => onWordMouseUp(verse.id, index, verse.text)}
-              >
-                {word}
-              </span>
+              <Fragment key={`${chapterId}-${verse.id}-${index}`}>
+                <span
+                  className={[
+                    'word-token',
+                    hasNote ? 'has-note' : '',
+                    isSelected ? 'is-selected' : '',
+                    isPreview ? 'drag-preview' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  data-chapter={chapterId}
+                  data-verse={verse.id}
+                  data-word={index}
+                  onMouseDown={(event) => onWordMouseDown(verse.id, index, verse.text, event)}
+                  onMouseEnter={() => onWordMouseEnter(verse.id, index)}
+                  onMouseUp={() => onWordMouseUp(verse.id, index, verse.text)}
+                >
+                  {word}
+                </span>
+                {index < words.length - 1 ? ' ' : null}
+              </Fragment>
             );
           })}
         </p>
