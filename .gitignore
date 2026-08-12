@@ -1,0 +1,14 @@
+node_modules/
+dist/
+client/dist/
+server/dist/
+server/data/
+*.db
+.DS_Store
+.env
+.env.local
+
+# Vendored quran-json source archive/extraction, only used to (re)generate
+# client/public/quran-data/ via `npm run copy-data`. Not needed at runtime.
+quran-json-main/
+quran-json-main.zip
