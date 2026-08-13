@@ -4,15 +4,30 @@ import { fetchNotesMeta } from '../api/notesClient';
 import { BackupControls } from '../components/BackupControls';
 import { NoteContentPreview } from '../components/NoteContentPreview';
 import { useNotes } from '../hooks/useNotes';
-import { isVerseNote } from '../types/notes';
-import type { ChapterSummary } from '../types/quran';
+import { isVerseNote, type Note } from '../types/notes';
+import type { Chapter, ChapterSummary } from '../types/quran';
+import { splitArabicWords } from '../types/quran';
+
+function noteArabicSnippet(
+  note: Note,
+  chapterVerses: Map<number, Map<number, string>>,
+): string | null {
+  const verseText = chapterVerses.get(note.chapterId)?.get(note.verseId);
+  if (!verseText) return null;
+  if (isVerseNote(note)) return verseText;
+  return splitArabicWords(verseText).slice(note.startWord, note.endWord + 1).join(' ');
+}
 
 export function NotesBrowserPage() {
   const { notes, loading, error, reload } = useNotes();
   const [chapters, setChapters] = useState<ChapterSummary[]>([]);
+  const [chapterVerses, setChapterVerses] = useState<Map<number, Map<number, string>>>(
+    () => new Map(),
+  );
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [meta, setMeta] = useState<{ categories: string[]; tags: string[] }>({
     categories: [],
     tags: [],
@@ -30,6 +45,46 @@ export function NotesBrowserPage() {
   useEffect(() => {
     void fetchNotesMeta().then(setMeta);
   }, [notes.length]);
+
+  const chapterIdsNeeded = useMemo(
+    () => [...new Set(notes.map((note) => note.chapterId))],
+    [notes],
+  );
+
+  useEffect(() => {
+    if (chapterIdsNeeded.length === 0) return;
+
+    let cancelled = false;
+    void (async () => {
+      const entries = await Promise.all(
+        chapterIdsNeeded.map(async (chapterId) => {
+          try {
+            const response = await fetch(`/quran-data/chapters/${chapterId}.json`);
+            if (!response.ok) return null;
+            const chapter = (await response.json()) as Chapter;
+            const verses = new Map(chapter.verses.map((verse) => [verse.id, verse.text]));
+            return [chapterId, verses] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      if (cancelled) return;
+
+      setChapterVerses((prev) => {
+        const next = new Map(prev);
+        for (const entry of entries) {
+          if (entry) next.set(entry[0], entry[1]);
+        }
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chapterIdsNeeded]);
 
   const chapterMap = useMemo(
     () => new Map(chapters.map((chapter) => [chapter.id, chapter])),
@@ -54,11 +109,20 @@ export function NotesBrowserPage() {
     return matchesQuery && matchesCategory && matchesTag;
   });
 
-  const noteLink = (note: (typeof notes)[number]) => {
+  const noteLink = (note: Note) => {
     if (isVerseNote(note)) {
       return `/surah/${note.chapterId}?type=verse&verse=${note.verseId}`;
     }
     return `/surah/${note.chapterId}?verse=${note.verseId}&start=${note.startWord}&end=${note.endWord}`;
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   if (loading) return <div className="page-state">Loading notes…</div>;
@@ -107,39 +171,73 @@ export function NotesBrowserPage() {
         <div className="notes-list">
           {filtered.map((note) => {
             const chapter = chapterMap.get(note.chapterId);
+            const expanded = expandedIds.has(note.id);
+            const arabic = noteArabicSnippet(note, chapterVerses);
+
             return (
-              <article key={note.id} className="note-card">
+              <article
+                key={note.id}
+                className={`note-card${expanded ? ' note-card-expanded' : ''}`}
+              >
                 <div className="note-card-header">
-                  <div>
-                    <h2>
-                      {chapter?.transliteration ?? `Surah ${note.chapterId}`} · Verse {note.verseId}
-                      {isVerseNote(note) ? ' (verse)' : ''}
-                    </h2>
-                    <p className="note-card-meta">
-                      {isVerseNote(note)
-                        ? 'Full verse note'
-                        : `Words ${note.startWord + 1}–${note.endWord + 1}`}
-                      {' · '}
-                      Updated {new Date(note.updatedAt).toLocaleString()}
-                    </p>
-                    {(note.category || note.tags.length > 0) && (
-                      <div className="note-badges">
-                        {note.category && <span className="badge category-badge">{note.category}</span>}
-                        {note.tags.map((tag) => (
-                          <span key={tag} className="badge tag-badge">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <Link to={noteLink(note)} className="note-card-link">
+                  <button
+                    type="button"
+                    className="note-card-toggle"
+                    aria-expanded={expanded}
+                    onClick={() => toggleExpanded(note.id)}
+                  >
+                    <span className="note-card-chevron" aria-hidden="true">
+                      {expanded ? '▾' : '▸'}
+                    </span>
+                    <span className="note-card-toggle-body">
+                      <h2>
+                        {chapter?.transliteration ?? `Surah ${note.chapterId}`} · Verse{' '}
+                        {note.verseId}
+                        {isVerseNote(note) ? ' (verse)' : ''}
+                      </h2>
+                      <p className="note-card-meta">
+                        {isVerseNote(note)
+                          ? 'Full verse note'
+                          : `Words ${note.startWord + 1}–${note.endWord + 1}`}
+                        {' · '}
+                        Updated {new Date(note.updatedAt).toLocaleString()}
+                      </p>
+                      {arabic && (
+                        <p
+                          className="note-card-arabic"
+                          dir="rtl"
+                          lang="ar"
+                        >
+                          {arabic}
+                        </p>
+                      )}
+                      {(note.category || note.tags.length > 0) && (
+                        <div className="note-badges">
+                          {note.category && (
+                            <span className="badge category-badge">{note.category}</span>
+                          )}
+                          {note.tags.map((tag) => (
+                            <span key={tag} className="badge tag-badge">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </span>
+                  </button>
+                  <Link
+                    to={noteLink(note)}
+                    className="note-card-link"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     Open in reader
                   </Link>
                 </div>
-                <div className="note-card-preview" dir="auto" style={{ unicodeBidi: 'plaintext' }}>
-                  <NoteContentPreview content={note.contentJson} />
-                </div>
+                {expanded && (
+                  <div className="note-card-preview" dir="auto" style={{ unicodeBidi: 'plaintext' }}>
+                    <NoteContentPreview content={note.contentJson} />
+                  </div>
+                )}
               </article>
             );
           })}

@@ -13,6 +13,7 @@ export function TopicsPage() {
     categories: [],
     tags: [],
   });
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,6 +33,15 @@ export function TopicsPage() {
 
     return matchesQuery && matchesCategory && matchesTag;
   });
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleDelete = async (id: string, title: string) => {
     if (!window.confirm(`Delete topic "${title}"?`)) return;
@@ -95,46 +105,72 @@ export function TopicsPage() {
         </div>
       ) : (
         <div className="notes-list">
-          {filtered.map((topic) => (
-            <article key={topic.id} className="note-card">
-              <div className="note-card-header">
-                <div>
-                  <h2>{topic.title}</h2>
-                  <p className="note-card-meta">
-                    Updated {new Date(topic.updatedAt).toLocaleString()}
-                  </p>
-                  {(topic.category || topic.tags.length > 0) && (
-                    <div className="note-badges">
-                      {topic.category && (
-                        <span className="badge category-badge">{topic.category}</span>
-                      )}
-                      {topic.tags.map((tag) => (
-                        <span key={tag} className="badge tag-badge">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="topic-card-actions">
-                  <Link to={`/topics/${topic.id}`} className="note-card-link">
-                    Edit
-                  </Link>
+          {filtered.map((topic) => {
+            const expanded = expandedIds.has(topic.id);
+            return (
+              <article
+                key={topic.id}
+                className={`note-card${expanded ? ' note-card-expanded' : ''}`}
+              >
+                <div className="note-card-header">
                   <button
                     type="button"
-                    className="topic-delete-button"
-                    disabled={deletingId === topic.id}
-                    onClick={() => void handleDelete(topic.id, topic.title)}
+                    className="note-card-toggle"
+                    aria-expanded={expanded}
+                    onClick={() => toggleExpanded(topic.id)}
                   >
-                    {deletingId === topic.id ? 'Deleting…' : 'Delete'}
+                    <span className="note-card-chevron" aria-hidden="true">
+                      {expanded ? '▾' : '▸'}
+                    </span>
+                    <span className="note-card-toggle-body">
+                      <h2>{topic.title}</h2>
+                      <p className="note-card-meta">
+                        Updated {new Date(topic.updatedAt).toLocaleString()}
+                      </p>
+                      {(topic.category || topic.tags.length > 0) && (
+                        <div className="note-badges">
+                          {topic.category && (
+                            <span className="badge category-badge">{topic.category}</span>
+                          )}
+                          {topic.tags.map((tag) => (
+                            <span key={tag} className="badge tag-badge">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </span>
                   </button>
+                  <div className="topic-card-actions">
+                    <Link
+                      to={`/topics/${topic.id}`}
+                      className="note-card-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Edit
+                    </Link>
+                    <button
+                      type="button"
+                      className="topic-delete-button"
+                      disabled={deletingId === topic.id}
+                      onClick={() => void handleDelete(topic.id, topic.title)}
+                    >
+                      {deletingId === topic.id ? 'Deleting…' : 'Delete'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="note-card-preview" dir="auto" style={{ unicodeBidi: 'plaintext' }}>
-                <NoteContentPreview content={topic.contentJson} />
-              </div>
-            </article>
-          ))}
+                {expanded && (
+                  <div
+                    className="note-card-preview"
+                    dir="auto"
+                    style={{ unicodeBidi: 'plaintext' }}
+                  >
+                    <NoteContentPreview content={topic.contentJson} />
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
     </div>
